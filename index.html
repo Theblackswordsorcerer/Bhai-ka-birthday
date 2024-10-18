@@ -335,12 +335,12 @@
         const gameArea = document.getElementById("gameArea");
         const scoreDisplay = document.getElementById("score");
         const leaderboardList = document.getElementById("leaderboardList");
-        let leaderboard = [];
+        let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
 
         function createStar() {
             const star = document.createElement("div");
-            star.className = 
- "star";
+            star.className = "star";
+            
             star.style.left = `${Math.random() * (gameArea.offsetWidth - 30)}px`;
             star.style.top = `${Math.random() * (gameArea.offsetHeight - 30)}px`;
 
@@ -381,6 +381,14 @@
         const wishForm = document.getElementById("wishForm");
         const wishesContainer = document.getElementById("wishesContainer");
 
+        // Load saved wishes
+        let wishes = JSON.parse(localStorage.getItem('wishes')) || [];
+        wishes.forEach(wish => {
+            const wishElement = document.createElement("div");
+            wishElement.innerHTML = `<strong>${wish.name}:</strong> ${wish.message}`;
+            wishesContainer.appendChild(wishElement);
+        });
+
         wishForm.addEventListener("submit", (e) => {
             e.preventDefault();
             const name = document.getElementById("visitorName").value;
@@ -390,12 +398,13 @@
             wishElement.innerHTML = `<strong>${name}:</strong> ${message}`;
             wishesContainer.appendChild(wishElement);
 
+            // Save wish
+            wishes.push({ name, message });
+            localStorage.setItem('wishes', JSON.stringify(wishes));
+
             // Clear form
             document.getElementById("visitorName").value = "";
             document.getElementById("wishMessage").value = "";
-
-            // Scroll to the bottom of wishes container
-            wishesContainer.scrollTop = wishesContainer.scrollHeight;
 
             // Add to leaderboard
             updateLeaderboard(name, score);
@@ -411,6 +420,8 @@
             leaderboard.sort((a, b) => b.score - a.score);
             leaderboard = leaderboard.slice(0, 5); // Keep top 5
 
+            localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+
             leaderboardList.innerHTML = "";
             leaderboard.forEach((entry, index) => {
                 const li = document.createElement("li");
@@ -419,6 +430,9 @@
                 leaderboardList.appendChild(li);
             });
         }
+
+        // Initialize leaderboard
+        updateLeaderboard('', 0);
     </script>
 </body>
 </html>
