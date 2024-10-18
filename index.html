@@ -296,7 +296,30 @@
         </div>
     </div>
 
+    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+
+    <!-- Add Firebase products that you want to use -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+
     <script>
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyA1234567890abcdefghijklmnopqrstuvwxyz",
+            authDomain: "mridul-birthday.firebaseapp.com",
+            databaseURL: "https://mridul-birthday-default-rtdb.firebaseio.com",
+            projectId: "mridul-birthday",
+            storageBucket: "mridul-birthday.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef1234567890abcdef"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+
+        // Get a reference to the database service
+        const database = firebase.database();
+
         // Countdown Timer
         function updateCountdown() {
             const birthday = new Date("2024-10-24T00:00:00").getTime();
@@ -306,7 +329,8 @@
             const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
             const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+            const seconds = 
+ Math.floor((timeLeft % (1000 * 60)) / 1000);
 
             document.getElementById("countdown").innerHTML = `${days}d ${hours}h ${minutes}m ${seconds}s until liftoff!`;
 
@@ -335,12 +359,10 @@
         const gameArea = document.getElementById("gameArea");
         const scoreDisplay = document.getElementById("score");
         const leaderboardList = document.getElementById("leaderboardList");
-        let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
 
         function createStar() {
             const star = document.createElement("div");
             star.className = "star";
-            
             star.style.left = `${Math.random() * (gameArea.offsetWidth - 30)}px`;
             star.style.top = `${Math.random() * (gameArea.offsetHeight - 30)}px`;
 
@@ -381,26 +403,30 @@
         const wishForm = document.getElementById("wishForm");
         const wishesContainer = document.getElementById("wishesContainer");
 
-        // Load saved wishes
-        let wishes = JSON.parse(localStorage.getItem('wishes')) || [];
-        wishes.forEach(wish => {
-            const wishElement = document.createElement("div");
-            wishElement.innerHTML = `<strong>${wish.name}:</strong> ${wish.message}`;
-            wishesContainer.appendChild(wishElement);
-        });
+        // Load wishes from Firebase
+        function loadWishes() {
+            const wishesRef = database.ref('wishes');
+            wishesRef.on('child_added', (snapshot) => {
+                const wish = snapshot.val();
+                const wishElement = document.createElement("div");
+                wishElement.innerHTML = `<strong>${wish.name}:</strong> ${wish.message}`;
+                wishesContainer.appendChild(wishElement);
+            });
+        }
+
+        loadWishes();
 
         wishForm.addEventListener("submit", (e) => {
             e.preventDefault();
             const name = document.getElementById("visitorName").value;
             const message = document.getElementById("wishMessage").value;
 
-            const wishElement = document.createElement("div");
-            wishElement.innerHTML = `<strong>${name}:</strong> ${message}`;
-            wishesContainer.appendChild(wishElement);
-
-            // Save wish
-            wishes.push({ name, message });
-            localStorage.setItem('wishes', JSON.stringify(wishes));
+            // Save wish to Firebase
+            const wishesRef = database.ref('wishes');
+            wishesRef.push({
+                name: name,
+                message: message
+            });
 
             // Clear form
             document.getElementById("visitorName").value = "";
@@ -411,28 +437,64 @@
         });
 
         function updateLeaderboard(name, score) {
-            const existingEntry = leaderboard.find(entry => entry.name === name);
-            if (existingEntry) {
-                existingEntry.score = Math.max(existingEntry.score, score);
-            } else {
-                leaderboard.push({ name, score });
-            }
-            leaderboard.sort((a, b) => b.score - a.score);
-            leaderboard = leaderboard.slice(0, 5); // Keep top 5
+            const leaderboardRef = database.ref('leaderboard');
+            leaderboardRef.orderByChild('score').limitToLast(5).once('value', (snapshot) => {
+                let leaderboard = [];
+                snapshot.forEach((childSnapshot) => {
+                    leaderboard.push({
+                        name: childSnapshot.val().name,
+                        score: childSnapshot.val().score
+                    });
+                });
 
-            localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+                const existingEntry = leaderboard.find(entry => entry.name === name);
+                if (existingEntry) {
+                    if (score > existingEntry.score) {
+                        existingEntry.score = score;
+                        leaderboardRef.child(childSnapshot.key).update({ score: score });
+                    }
+                } else {
+                    leaderboardRef.push({ name: name, score: score });
+                }
 
-            leaderboardList.innerHTML = "";
-            leaderboard.forEach((entry, index) => {
-                const li = document.createElement("li");
-                li.className = "leaderboard-item";
-                li.innerHTML = `<span>${index + 1}. ${entry.name}</span> <span>${entry.score} stars</span>`;
-                leaderboardList.appendChild(li);
+                leaderboard.sort((a, b) => b.score - a.score);
+                leaderboard = leaderboard.slice(0, 5); // Keep top 5
+
+                leaderboardList.innerHTML = "";
+                leaderboard.forEach((entry, index) => {
+                    const li = document.createElement("li");
+                    li.className = "leaderboard-item";
+                    li.innerHTML = `<span>${index + 1}. ${entry.name}</span> <span>${entry.score} stars</span>`;
+                    leaderboardList.appendChild(li);
+                });
             });
         }
 
         // Initialize leaderboard
-        updateLeaderboard('', 0);
+        function initLeaderboard() {
+            const leaderboardRef = database.ref('leaderboard');
+            leaderboardRef.orderByChild('score').limitToLast(5).on('value', (snapshot) => {
+                let leaderboard = [];
+                snapshot.forEach((childSnapshot) => {
+                    leaderboard.push({
+                        name: childSnapshot.val().name,
+                        score: childSnapshot.val().score
+                    });
+                });
+
+                leaderboard.sort((a, b) => b.score - a.score);
+
+                leaderboardList.innerHTML = "";
+                leaderboard.forEach((entry, index) => {
+                    const li = document.createElement("li");
+                    li.className = "leaderboard-item";
+                    li.innerHTML = `<span>${index + 1}. ${entry.name}</span> <span>${entry.score} stars</span>`;
+                    leaderboardList.appendChild(li);
+                });
+            });
+        }
+
+        initLeaderboard();
     </script>
 </body>
 </html>
